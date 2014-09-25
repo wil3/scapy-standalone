@@ -1,0 +1,152 @@
+.TH SCAPY 1 "May 12, 2003"
+.SH NAME
+scapy \- Interactive packet manipulation tool
+.SH SYNOPSIS
+.B scapy
+.RI [-h]\ [-s\ file]
+.SH DESCRIPTION
+This manual page documents briefly the
+.B Scapy
+tool.
+.PP
+\fBScapy\fP is a powerful interactive packet manipulation program. It is able to forge or decode packets of a wide number of protocols, send them on the wire, capture them, match requests and replies, and much more. It can easily handle most classical tasks like scanning, tracerouting, probing, unit tests, attacks or network discovery (it can replace hping, 85% of nmap, arpspoof, arp-sk, arping, tcpdump, tethereal, p0f, etc.). It also performs very well at a lot of other specific tasks that most other tools can't handle, like sending invalid frames, injecting your own 802.11 frames, combining technics (VLAN hopping+ARP cache poisoning, VOIP decoding on WEP encrypted channel, ...), etc.
+
+.SH PHILOSOPHY
+
+What makes \fBScapy\fP different from most other networking tools ?
+
+First, with most other tools, you won't build someting the author did not imagine. These tools have been built for a specific goal and can't deviate much from it. For example, an ARP cache poisoning program won't let you use double 802.1q encapsulation. Or try to find a program that can send, say, an ICMP packet with padding (I said padding, not payload, see?). In fact, each time you have a new need, you have to build a new tool.
+
+Second, they usually confuse decoding and interpreting. Machines are good at decoding and can help human beings with that. Interpretation is reserved to human beings. Some programs try to mimic this behaviour. For instance they say "this port is open" instead of "I received a SYN-ACK". Sometimes they are right. Sometimes not. It's easier for beginners, but when you know what you're doing, you keep on trying to deduce what really happened from the program's interpretation to make your own, which is hard because you lost a big amount of information. And you often end up using tcpdump -xX to decode and interpret what the tool missed.
+
+Third, even programs which only decode do not give you all the information they received. The network's vision they give you is the one their author thought was sufficient. But it is not complete, and you have a bias. For instance, do you know a tool that reports the padding ?
+
+\fBScapy\fP tries to overcome those problems. It enables you to build exactly the packets you want. Even if I think stacking a 802.1q layer on top of TCP has no sense, it may have some for somebody else working on some product I don't know. Scapy has a flexible model that tries to avoid such arbitrary limits. You're free to put any value you want in any field you want, and stack them like you want. You're an adult after all.
+
+In fact, it's like building a new tool each time, but instead of dealing with a hundred line C program, you only write 2 lines of \fBScapy\fP.
+
+After a probe (scan, traceroute, etc.) \fBScapy\fP always gives you the full decoded packets from the probe, before any interpretation. That means that you can probe once and interpret many times, ask for a traceroute and look at the padding for instance. 
+
+.SH HOW IT WORKS
+
+\fBScapy\fP uses the python interpreter as a command board. That means that you can use directly python language (assign variables, use loops, define functions, etc.)
+
+The idea is simple. \fBScapy\fP mainly does two things : sending packets and receiving answers. You define a set of packets, it sends them, receives answers, matches requests with answers and returns a list of packet couples (request, answer) and a list of unmatched packets. This has the big advantage over tools like nmap or hping that an answer is not reduced to (open/closed/filtered), but is the whole packet.
+
+On top of this can be build more high level functions, for example one that does traceroutes and give as a result only the start TTL of the request and the source IP of the answer. One that pings a whole network and gives the list of machines answering. One that does a portscan and returns a LaTeX report. 
+
+.SH OPTIONS
+Options for scapy are:
+.TP
+\fB\-h\fR
+display help screen and exit
+.TP
+\fB\-s\fR FILE
+use FILE to save/load session values (variables, functions, intances, ...) 
+
+.SH COMMANDS
+Only the vital commands to begin are listed here for the moment.
+.TP
+\fBls()\fR
+lists supported protocol layers. If a protocol layer is given as parameter, lists its fields and types of fields.
+.TP
+\fBlsc()\fR
+lists some user commands. If a command is given as parameter, its documentation is displayed.
+.TP
+\fBconf\fR
+this object contains the configuration. 
+
+
+.SH EXAMPLES
+
+More verbose examples are available at
+http://www.secdev.org/projects/scapy/
+Just run \fBscapy\fP and try the following commands in the interpreter.
+
+.LP
+Test the robustness of a network stack with invalid packets:
+.nf
+sr(IP(dst="172.16.1.1", ihl=2, options="\verb$\x02$", version=3)/ICMP())
+.fi
+
+.LP
+Packet sniffing and dissection (with a bpf filter or thetereal-like output):
+.nf
+a=sniff(filter="tcp port 110")
+a=sniff(prn = lambda x: x.display) 
+.fi
+
+.LP
+Sniffed packet reemission:
+.nf
+a=sniff(filter="tcp port 110")
+sendp(a)
+.fi
+
+.LP
+Pcap file packet reemission:
+.nf
+sendp(rdpcap("file.cap"))
+.fi
+
+.LP
+Manual TCP traceroute:
+.nf
+sr(IP(dst="www.google.com", ttl=(1,30))/TCP(seq=RandInt(), sport=RandShort(), dport=dport)
+.fi
+
+.LP
+Protocol scan:
+.nf
+sr(IP(dst="172.16.1.28", proto=(1,254)))
+.fi
+
+.LP
+ARP ping:
+.nf
+srp(Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst="172.16.1.1/24"))
+.fi
+
+.LP
+ACK scan:
+.nf
+sr(IP(dst="172.16.1.28")/TCP(dport=(1,1024), flags="A"))
+.fi
+
+.LP
+Passive OS fingerprinting:
+.nf
+sniff(prn=prnp0f) 
+.fi
+
+.LP
+Active OS fingerprinting:
+.nf
+nmap_fp("172.16.1.232")
+.fi
+
+
+.LP
+ARP cache poisonning:
+.nf
+sendp(Ether(dst=tmac)/ARP(op="who-has", psrc=victim, pdst=target))
+.fi
+
+.LP
+Reporting:
+.nf
+report_ports("192.168.2.34", (20,30))
+.fi
+
+
+.SH BUGS
+Does not give the right source IP for routes that use interface aliases.
+
+May miss packets under heavy load.
+
+.SH AUTHOR
+Philippe Biondi <phil@secdev.org>
+.PP
+This manual page was written by Alberto Gonzalez Iniesta <agi@agi.as>
+and Philippe Biondi
+for the Debian GNU/Linux system (but may be used by others).
